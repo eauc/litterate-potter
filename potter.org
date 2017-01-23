@@ -1,0 +1,203 @@
+#+TITLE: Katta Potter
+#+PROPERTY: header-args :comments org
+
+* Introduction
+
+Once upon a time there was a series of 5 books about a very English hero called Harry.
+(At least when this Kata was invented, there were only 5. Since then they have multiplied)
+Children all over the world thought he was fantastic, and, of course, so did the publisher.
+So in a gesture of immense generosity to mankind, (and to increase sales)
+they set up the following pricing model to take advantage of Harry's magical powers.
+
+* calculateCartCost
+  :PROPERTIES:
+  :header-args:js: :tangle ./index.js
+  :END:
+
+#+BEGIN_SRC js :exports none
+  module.exports = calculateCartCost;
+
+  const R = require('ramda');
+#+END_SRC
+
+- One copy of any of the five books costs 8 EUR.
+- If, however, you buy two different books from the series, you get a 5% discount on those two books.
+- If you buy 3 different books, you get a 10% discount.
+- With 4 different books, you get a 20% discount.
+- If you go the whole hog, and buy all 5, you get a huge 25% discount.
+
+Note that if you buy, say, four books, of which 3 are different titles,
+you get a 10% discount on the 3 that form part of a set, but the fourth book still costs 8 EUR.
+
+#+BEGIN_SRC js
+  function calculateCartCost(cart) {
+    if (R.isEmpty(cart)) return 0;
+    const set = getTitlesSet(cart);
+    return calculateSetCost(set)
+      + calculateCartCost(getRemaining({ set }, cart));
+  }
+#+END_SRC
+
+When cart contains similar titles, in order to compute the reduction
+we will extract the biggest set of different titles and apply the reduction.
+
+#+BEGIN_SRC js
+  function getTitlesSet(cart) {
+    return R.uniq(cart);
+  }
+#+END_SRC
+
+Computing the cost of a set of titles is easy :
+
+#+BEGIN_SRC js
+  const cartSizeToReduction = [ 1, 1, 0.95, 0.9, 0.8, 0.75];
+
+  function calculateSetCost(set) {
+    const size = R.length(set);
+    return 8 * size * cartSizeToReduction[size];
+  }
+#+END_SRC
+
+After this we compute the items remaining after removing the set from the cart,
+and we recursively calculate the price of those.
+
+#+BEGIN_SRC js
+  function getRemaining({ set: originalSet }, cart) {
+    return R.pipe(
+      R.reduce(([remaining, set], title) => {
+        if (R.find(R.equals(title), set)) {
+          return [
+            remaining,
+            R.without([title], set),
+          ];
+        }
+        else {
+          return [
+            R.append(title, remaining),
+            set,
+          ];
+        }
+      }, [[], originalSet]),
+      R.head
+    )(cart);
+  }
+#+END_SRC
+
+* Tests
+  :PROPERTIES:
+  :header-args:js: :tangle ./test.js
+  :END:
+
+#+BEGIN_SRC js :exports none
+  const expect = require('chai').expect;
+  const calculateCartCost = require('./index.js');
+#+END_SRC
+
+One copy of any of the five books costs 8 EUR.
+
+#+BEGIN_SRC js
+  it('One copy of any of the five books costs 8 EUR', function () {
+    const cart = ['The philosopher stone'];
+    expect(calculateCartCost(cart))
+      .to.equal(8);
+  });
+#+END_SRC
+
+If, however, you buy two different books from the series, you get a 5% discount on those two books.
+
+#+BEGIN_SRC js
+  it('Two different books get a 5% discount', function () {
+    const cart = [
+      'The philosopher stone',
+      'The chamber of secrets'
+    ];
+    expect(calculateCartCost(cart))
+      .to.equal(8 * 2 * 0.95);
+  });
+#+END_SRC
+
+If you buy 3 different books, you get a 10% discount.
+
+#+BEGIN_SRC js
+  it('Three different books get a 10% discount', function () {
+    const cart = [
+      'The philosopher stone',
+      'The chamber of secrets',
+      'The prisonner of Azkahban',
+    ];
+    expect(calculateCartCost(cart))
+      .to.equal(8 * 3 * 0.9);
+  });
+#+END_SRC
+
+With 4 different books, you get a 20% discount.
+
+#+BEGIN_SRC js
+  it('Four different books get a 20% discount', function () {
+    const cart = [
+      'The philosopher stone',
+      'The chamber of secrets',
+      'The prisonner of Azkahban',
+      'The goblet of fire',
+    ];
+    expect(calculateCartCost(cart))
+      .to.equal(8 * 4 * 0.8);
+  });
+#+END_SRC
+
+If you go the whole hog, and buy all 5, you get a huge 25% discount.
+
+#+BEGIN_SRC js
+  it('Five different books get a 25% discount', function () {
+    const cart = [
+      'The philosopher stone',
+      'The chamber of secrets',
+      'The prisonner of Azkahban',
+      'The goblet of fire',
+      'The order of the phoenix',
+    ];
+    expect(calculateCartCost(cart))
+      .to.equal(8 * 5 * 0.75);
+  });
+#+END_SRC
+
+Note that if you buy, say, four books, of which 3 are different titles,
+you get a 10% discount on the 3 that form part of a set, but the fourth book still costs 8 EUR.
+
+#+BEGIN_SRC js
+  it('Four books with three different titles get a 10% discount on three + 8EUR', function () {
+    const cart = [
+      'The philosopher stone',
+      'The prisonner of Azkahban',
+      'The goblet of fire',
+      'The prisonner of Azkahban',
+    ];
+    expect(calculateCartCost(cart))
+      .to.equal(8 * 3 * 0.9 + 8);
+  });
+#+END_SRC
+
+** Run tests
+
+#+BEGIN_SRC sh :tangle no :results both verbatim
+  npm test || :
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+> potter@1.0.0 test /home/auclair/code/kata/potter
+> mocha --compilers js:babel-core/register
+
+
+
+  ✓ One copy of any of the five books costs 8 EUR
+  ✓ Two different books get a 5% discount
+  ✓ Three different books get a 10% discount
+  ✓ Four different books get a 20% discount
+  ✓ Five different books get a 25% discount
+  ✓ Four books with three different titles get a 10% discount on three + 8EUR
+
+  6 passing (38ms)
+
+#+end_example
